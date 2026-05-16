@@ -3,14 +3,12 @@ import psycopg2
 import sys
 import os
 
-# Configuraciones de conexión (deben coincidir con tu docker-compose.yml)
+# Configuraciones de conexión
 DB_HOST = "localhost"
 DB_PORT = "5432"
 DB_NAME = "yahoo_answers"
 DB_USER = "admin"
 DB_PASS = "adminpassword"
-
-# Ruta al dataset (asumiendo que ejecutas el script desde la carpeta 'scripts')
 CSV_FILE = "../dataset/test.csv"
 
 
@@ -45,7 +43,7 @@ def seed_database():
 
             for row in reader:
                 if len(row) == 4:
-                    # Parseamos los datos: Aseguramos que class_index sea entero
+                    # Asegura que class_index sea entero
                     try:
                         class_index = int(row[0])
                         batch.append((class_index, row[1], row[2], row[3]))
@@ -66,7 +64,7 @@ def seed_database():
                 conn.commit()
                 print(f"Insertados {total_inserted} registros...")
 
-        print("¡Ingesta (Seeding) completada con éxito!")
+        print("Ingesta completada con éxito.")
 
     except psycopg2.Error as e:
         print(f"Error de base de datos: {e}")
