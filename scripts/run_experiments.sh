@@ -61,7 +61,13 @@ run_experiment() {
 
     # 3. Recolectar métricas
     echo "[3/4] Recolectando métricas..."
+    if [ -d "../.venv" ]; then
+        source ../.venv/bin/activate
+    elif [ -d "../venv" ]; then
+        source ../venv/bin/activate
+    fi
     python3 collect_metrics.py --experiment "$exp_name" --dist "$dist" --policy "$policy" --size "$size"
+    deactivate 2>/dev/null || true
 
     echo "[4/4] Experimento $exp_name finalizado."
     sleep 2

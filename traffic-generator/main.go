@@ -153,9 +153,9 @@ func main() {
 	fmt.Println("------------------------------------")
 
 	var wg sync.WaitGroup
-	// Semáforo para limitar la concurrencia a 20 peticiones simultáneas
-	// Esto previene que el servidor sature su TCP backlog y devuelva i/o timeout
-	concurrencyLimit := 20
+	// Semáforo para limitar la concurrencia a 10 peticiones simultáneas
+	// Esto previene que el servidor sature su CPU (thrashing)
+	concurrencyLimit := 10
 	sem := make(chan struct{}, concurrencyLimit)
 
 	distLower := strings.ToLower(distribution)
