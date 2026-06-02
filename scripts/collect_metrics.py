@@ -4,7 +4,7 @@ import csv
 import argparse
 import os
 
-METRICS_URL = "http://localhost:8000/metrics"
+METRICS_URL = "http://localhost:8080/metrics"
 RESULTS_FILE = "../results/metrics.csv"
 
 

@@ -51,7 +51,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       MOCK_LLM: ${MOCK_LLM:-True}
     ports:
-      - "8001:8001"
+      - "8081:8001"
     depends_on:
       db:
         condition: service_healthy
@@ -72,7 +72,7 @@ services:
       DB_PASS: ${POSTGRES_PASSWORD}
       CACHE_TTL: ${CACHE_TTL:-3600}
     ports:
-      - "8000:8000"
+      - "8080:8000"
     depends_on:
       redis:
         condition: service_healthy

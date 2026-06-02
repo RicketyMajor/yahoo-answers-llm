@@ -53,7 +53,7 @@ run_experiment() {
     docker exec yahoo_cache redis-cli flushall > /dev/null
 
     # Reiniciar contadores en el cache-service
-    curl -X POST http://localhost:8000/metrics/reset 2>/dev/null || true
+    curl -X POST http://localhost:8080/metrics/reset 2>/dev/null || true
 
     # 2. Ejecutar generador de tráfico (se ejecuta en foreground y luego se detiene)
     echo "[2/4] Generando tráfico ($TOTAL_REQUESTS peticiones a $RATE req/s)..."
