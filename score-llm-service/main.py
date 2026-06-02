@@ -28,10 +28,14 @@ logger = logging.getLogger(__name__)
 
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-# Cargar modelo de Embeddings local (all-MiniLM-L6-v2)
-logger.info("Cargando modelo de embeddings (esto puede tomar unos segundos la primera vez)...")
-embedder = SentenceTransformer('all-MiniLM-L6-v2')
-logger.info("Modelo de embeddings cargado exitosamente.")
+# Cargar modelo de Embeddings local (all-MiniLM-L6-v2) solo si no es mock
+if os.environ.get("MOCK_LLM", "False").lower() != "true":
+    logger.info("Cargando modelo de embeddings (esto puede tomar unos segundos la primera vez)...")
+    embedder = SentenceTransformer('all-MiniLM-L6-v2')
+    logger.info("Modelo de embeddings cargado exitosamente.")
+else:
+    logger.info("MOCK_LLM activo: Saltando carga de modelo de embeddings (all-MiniLM-L6-v2).")
+    embedder = None
 
 app = FastAPI(title="Score & LLM Service")
 
