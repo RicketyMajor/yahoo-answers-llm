@@ -179,9 +179,14 @@ def evaluate_question(req: EvaluateRequest):
             logger.info(f"[LLM] Consultando LLM para pregunta {req.question_id}...")
             llm_answer = generate_llm_answer(title, content)
 
-            # Calcular ambas métricas de calidad
-            cosine_score = calculate_cosine_similarity(best_answer, llm_answer)
-            rouge_score = calculate_rouge_l(best_answer, llm_answer)
+            # Calcular ambas métricas de calidad (Solo si NO es un mock, para ahorrar CPU)
+            is_mock = os.environ.get("MOCK_LLM", "False").lower() == "true"
+            if is_mock:
+                cosine_score = 1.0
+                rouge_score = 1.0
+            else:
+                cosine_score = calculate_cosine_similarity(best_answer, llm_answer)
+                rouge_score = calculate_rouge_l(best_answer, llm_answer)
 
             logger.info(
                 f"[SCORE] Pregunta {req.question_id}: "
