@@ -27,7 +27,7 @@ services:
     container_name: yahoo_cache
     ports:
       - "6379:6379"
-    command: redis-server --maxmemory ${CACHE_MAX_MEMORY:-2mb} --maxmemory-policy ${CACHE_EVICTION_POLICY:-allkeys-lru}
+    command: redis-server
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

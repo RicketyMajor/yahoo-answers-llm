@@ -76,21 +76,24 @@ func simulateRequest(questionID int, wg *sync.WaitGroup) {
 }
 
 // Generador de tráfico con distribución de Poisson (intervalos exponenciales)
-func generatePoissonTraffic(rate float64, total int, wg *sync.WaitGroup) {
+func generatePoissonTraffic(rate float64, total int, wg *sync.WaitGroup, sem chan struct{}) {
 	log.Printf("Iniciando tráfico Poisson (Tasa esperada: %.2f req/s, Total: %d)", rate, total)
 	for i := 0; i < total; i++ {
-		// Intervalo de tiempo inter-arribo (exponencial)
 		interArrivalTime := time.Duration(float64(time.Second) * (1 / rate) * rand.ExpFloat64())
 		time.Sleep(interArrivalTime)
 
 		randomQID := rand.Intn(seedLimit) + 1
 		wg.Add(1)
-		go simulateRequest(randomQID, wg)
+		go func(id int) {
+			sem <- struct{}{} // Adquirir token
+			simulateRequest(id, wg)
+			<-sem // Liberar token
+		}(randomQID)
 	}
 }
 
 // Generador de tráfico Constante
-func generateConstantTraffic(rate float64, total int, wg *sync.WaitGroup) {
+func generateConstantTraffic(rate float64, total int, wg *sync.WaitGroup, sem chan struct{}) {
 	log.Printf("Iniciando tráfico Constante (Tasa: %.2f req/s, Total: %d)", rate, total)
 	delay := time.Duration(float64(time.Second) / rate)
 	
@@ -98,15 +101,18 @@ func generateConstantTraffic(rate float64, total int, wg *sync.WaitGroup) {
 		time.Sleep(delay)
 		randomQID := rand.Intn(seedLimit) + 1
 		wg.Add(1)
-		go simulateRequest(randomQID, wg)
+		go func(id int) {
+			sem <- struct{}{} // Adquirir token
+			simulateRequest(id, wg)
+			<-sem // Liberar token
+		}(randomQID)
 	}
 }
 
 // Generador de tráfico Zipf
-func generateZipfTraffic(rate float64, total int, wg *sync.WaitGroup) {
+func generateZipfTraffic(rate float64, total int, wg *sync.WaitGroup, sem chan struct{}) {
 	log.Printf("Iniciando tráfico Zipf (Tasa: %.2f req/s, Total: %d)", rate, total)
 	
-	// Parámetros para Zipf
 	s := 1.1 // exponente > 1
 	v := 1.0
 	imax := uint64(seedLimit - 1)
@@ -123,12 +129,14 @@ func generateZipfTraffic(rate float64, total int, wg *sync.WaitGroup) {
 	
 	for i := 0; i < total; i++ {
 		time.Sleep(delay)
-		
-		// zipf genera valores de 0 a imax. Sumamos 1 porque nuestros IDs empiezan en 1
 		randomQID := int(zipf.Uint64()) + 1
 		
 		wg.Add(1)
-		go simulateRequest(randomQID, wg)
+		go func(id int) {
+			sem <- struct{}{} // Adquirir token
+			simulateRequest(id, wg)
+			<-sem // Liberar token
+		}(randomQID)
 	}
 }
 
@@ -145,14 +153,18 @@ func main() {
 	fmt.Println("------------------------------------")
 
 	var wg sync.WaitGroup
+	// Semáforo para limitar la concurrencia a 20 peticiones simultáneas
+	// Esto previene que el servidor sature su TCP backlog y devuelva i/o timeout
+	concurrencyLimit := 20
+	sem := make(chan struct{}, concurrencyLimit)
 
 	distLower := strings.ToLower(distribution)
 	if distLower == "poisson" {
-		generatePoissonTraffic(rate, totalRequests, &wg)
+		generatePoissonTraffic(rate, totalRequests, &wg, sem)
 	} else if distLower == "zipf" {
-		generateZipfTraffic(rate, totalRequests, &wg)
+		generateZipfTraffic(rate, totalRequests, &wg, sem)
 	} else if distLower == "constante" || distLower == "constant" {
-		generateConstantTraffic(rate, totalRequests, &wg)
+		generateConstantTraffic(rate, totalRequests, &wg, sem)
 	} else {
 		log.Fatalf("Distribución no soportada: %s", distribution)
 	}
