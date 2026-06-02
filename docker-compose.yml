@@ -1,18 +1,128 @@
-version: '3.8'
-
 services:
+  # ============================================
+  # INFRAESTRUCTURA
+  # ============================================
   db:
     image: postgres:15
     container_name: yahoo_db
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: adminpassword
-      POSTGRES_DB: yahoo_answers
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "5436:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yahoo-network
+
+  redis:
+    image: redis:7
+    container_name: yahoo_cache
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory ${CACHE_MAX_MEMORY:-2mb} --maxmemory-policy ${CACHE_EVICTION_POLICY:-allkeys-lru}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yahoo-network
+
+  # ============================================
+  # SERVICIOS DE APLICACIÓN
+  # ============================================
+  score-llm-service:
+    build: ./score-llm-service
+    container_name: yahoo_score_llm
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASS: ${POSTGRES_PASSWORD}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      MOCK_LLM: ${MOCK_LLM:-True}
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - yahoo-network
+
+  cache-service:
+    build: ./cache-service
+    container_name: yahoo_cache_service
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SCORE_SERVICE_URL: http://score-llm-service:8001
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASS: ${POSTGRES_PASSWORD}
+      CACHE_TTL: ${CACHE_TTL:-3600}
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      score-llm-service:
+        condition: service_started
+      db:
+        condition: service_healthy
+    networks:
+      - yahoo-network
+
+  traffic-generator:
+    build: ./traffic-generator
+    container_name: yahoo_traffic_gen
+    environment:
+      CACHE_SERVICE_URL: http://cache-service:8000
+      DISTRIBUTION: ${DISTRIBUTION:-poisson}
+      RATE: ${RATE:-10}
+      TOTAL_REQUESTS: ${TOTAL_REQUESTS:-500}
+    depends_on:
+      cache-service:
+        condition: service_started
+    networks:
+      - yahoo-network
+
+  # ============================================
+  # UTILIDADES (ejecutar con --profile)
+  # ============================================
+  seed:
+    build: ./scripts
+    container_name: yahoo_seed
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASS: ${POSTGRES_PASSWORD}
+      SEED_LIMIT: ${SEED_LIMIT:-10000}
+    volumes:
+      - ./dataset:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - seed
+    networks:
+      - yahoo-network
+
+networks:
+  yahoo-network:
+    driver: bridge
 
 volumes:
   pgdata:
