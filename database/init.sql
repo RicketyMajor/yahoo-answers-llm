@@ -5,10 +5,13 @@ CREATE TABLE IF NOT EXISTS questions (
     content TEXT,
     best_answer TEXT NOT NULL,
     llm_answer TEXT,
-    score NUMERIC(5,4), -- Almacena la métrica de calidad 
-    access_count INTEGER DEFAULT 0 -- Contador para los cache hits/misses
+    score NUMERIC(5,4),        -- Similitud semántica (coseno) 
+    rouge_score NUMERIC(5,4),  -- Similitud léxica (ROUGE-L)
+    access_count INTEGER DEFAULT 0,   -- Contador de accesos (cache hits)
+    processed_at TIMESTAMP           -- Timestamp de procesamiento por el LLM
 );
 
--- Crear un índice sobre access_count puede ser útil luego para analizar 
--- qué preguntas fueron las más consultadas por el generador de tráfico.
+-- Índices para consultas de análisis
 CREATE INDEX idx_access_count ON questions(access_count);
+CREATE INDEX idx_class_index ON questions(class_index);
+CREATE INDEX idx_score ON questions(score);
