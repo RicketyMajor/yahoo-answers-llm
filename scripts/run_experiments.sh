@@ -16,7 +16,7 @@ SEED_LIMIT=10000
 mkdir -p ../results
 
 echo "======================================================="
-echo "Iniciando Batería de Experimentos - Yahoo Answers LLM"
+echo "Iniciando Experimentos - Yahoo Answers LLM"
 echo "======================================================="
 
 # Función para ejecutar un experimento
@@ -39,16 +39,20 @@ run_experiment() {
     export TOTAL_REQUESTS=$TOTAL_REQUESTS
     export RATE=$RATE
 
-    # 1. Reiniciar servicios críticos para asegurar un estado limpio
-    echo "[1/4] Reiniciando servicios (redis, cache-service, traffic-generator)..."
-    docker compose stop redis cache-service traffic-generator
-    docker compose rm -f redis cache-service traffic-generator
+    # 1. Preparar servicios y limpiar estado
+    echo "[1/4] Limpiando estado y aplicando configuraciones..."
+    
+    # Asegurarnos de que los servicios base estén corriendo (esto ignora el error de stop anterior)
     docker compose up -d redis cache-service
+    
+    # Aplicar políticas y tamaños a redis en caliente (evita reiniciar el contenedor)
+    docker exec yahoo_cache redis-cli config set maxmemory $size > /dev/null
+    docker exec yahoo_cache redis-cli config set maxmemory-policy $policy > /dev/null
+    
+    # Vaciar todos los datos cacheados
+    docker exec yahoo_cache redis-cli flushall > /dev/null
 
-    # Esperar a que redis y el cache proxy estén listos
-    sleep 5
-
-    # Reiniciar métricas por si acaso (aunque acabamos de crear un redis nuevo)
+    # Reiniciar contadores en el cache-service
     curl -X POST http://localhost:8000/metrics/reset 2>/dev/null || true
 
     # 2. Ejecutar generador de tráfico (se ejecuta en foreground y luego se detiene)
