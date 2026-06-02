@@ -58,6 +58,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - yahoo-network
 
@@ -81,9 +86,14 @@ services:
       redis:
         condition: service_healthy
       score-llm-service:
-        condition: service_started
+        condition: service_healthy
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - yahoo-network
 
@@ -98,7 +108,7 @@ services:
       - apparmor:unconfined
     depends_on:
       cache-service:
-        condition: service_started
+        condition: service_healthy
     networks:
       - yahoo-network
 
