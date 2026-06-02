@@ -46,14 +46,14 @@ run_experiment() {
     docker compose up -d redis cache-service
     
     # Aplicar políticas y tamaños a redis en caliente (evita reiniciar el contenedor)
-    docker exec yahoo_cache_v2 redis-cli config set maxmemory $size > /dev/null
-    docker exec yahoo_cache_v2 redis-cli config set maxmemory-policy $policy > /dev/null
+    docker compose exec redis redis-cli config set maxmemory $size > /dev/null
+    docker compose exec redis redis-cli config set maxmemory-policy $policy > /dev/null
     
     # Vaciar todos los datos cacheados
-    docker exec yahoo_cache_v2 redis-cli flushall > /dev/null
+    docker compose exec redis redis-cli flushall > /dev/null
 
     # Reiniciar contadores en el cache-service
-    curl -X POST http://localhost:8083/metrics/reset 2>/dev/null || true
+    curl -X POST http://localhost:8080/metrics/reset 2>/dev/null || true
 
     # 2. Ejecutar generador de tráfico (se ejecuta en foreground y luego se detiene)
     echo "[2/4] Generando tráfico ($TOTAL_REQUESTS peticiones a $RATE req/s)..."
