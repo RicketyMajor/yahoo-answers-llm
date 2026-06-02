@@ -44,7 +44,7 @@ def get_db_pool():
     if db_pool is None:
         db_pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=2,
-            maxconn=10,
+            maxconn=40,
             host=os.environ.get("DB_HOST", "localhost"),
             port=os.environ.get("DB_PORT", "5432"),
             dbname=os.environ.get("DB_NAME", "yahoo_answers"),
