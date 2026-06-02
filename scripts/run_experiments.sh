@@ -13,7 +13,7 @@ RATE=50
 SEED_LIMIT=10000
 
 # Asegurarse de que el directorio de resultados existe
-mkdir -p ../results
+mkdir -p ./results
 
 echo "======================================================="
 echo "Iniciando Experimentos - Yahoo Answers LLM"
@@ -42,8 +42,11 @@ run_experiment() {
     # 1. Preparar servicios y limpiar estado
     echo "[1/4] Limpiando estado y aplicando configuraciones..."
     
-    # Asegurarnos de que los servicios base estén corriendo (esto ignora el error de stop anterior)
-    docker compose up -d redis cache-service
+    # Levantar DB y Redis y esperar a que estén healthy
+    docker compose up -d db redis --wait
+    
+    # Levantar los servicios de aplicación y esperar que estén healthy
+    docker compose up -d cache-service --wait
     
     # Aplicar políticas y tamaños a redis en caliente (evita reiniciar el contenedor)
     docker compose exec redis redis-cli config set maxmemory $size > /dev/null
@@ -61,12 +64,12 @@ run_experiment() {
 
     # 3. Recolectar métricas
     echo "[3/4] Recolectando métricas..."
-    if [ -d "../.venv" ]; then
-        source ../.venv/bin/activate
-    elif [ -d "../venv" ]; then
-        source ../venv/bin/activate
+    if [ -d ".venv" ]; then
+        source .venv/bin/activate
+    elif [ -d "venv" ]; then
+        source venv/bin/activate
     fi
-    python3 collect_metrics.py --experiment "$exp_name" --dist "$dist" --policy "$policy" --size "$size"
+    python3 scripts/collect_metrics.py --experiment "$exp_name" --dist "$dist" --policy "$policy" --size "$size"
     deactivate 2>/dev/null || true
 
     echo "[4/4] Experimento $exp_name finalizado."
@@ -74,8 +77,8 @@ run_experiment() {
 }
 
 # Crear el archivo CSV de métricas con cabeceras (si no existe)
-if [ ! -f "../results/metrics.csv" ]; then
-    echo "experiment,distribution,policy,size,total_requests,hits,misses,hit_rate,avg_hit_lat,avg_miss_lat,redis_used,redis_max" > ../results/metrics.csv
+if [ ! -f "./results/metrics.csv" ]; then
+    echo "experiment,distribution,policy,size,total_requests,hits,misses,hit_rate,avg_hit_lat,avg_miss_lat,redis_used,redis_max" > ./results/metrics.csv
 fi
 
 # ==============================================================================

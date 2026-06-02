@@ -58,6 +58,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./results:/app/results
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
       interval: 10s
@@ -90,7 +92,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -111,6 +113,18 @@ services:
         condition: service_healthy
     networks:
       - yahoo-network
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "3000:3000"
+    security_opt:
+      - apparmor:unconfined
+    networks:
+      - yahoo-network
+    depends_on:
+      score-llm-service:
+        condition: service_healthy
 
   # ============================================
   # UTILIDADES (ejecutar con --profile)

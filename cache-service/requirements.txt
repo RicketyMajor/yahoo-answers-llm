@@ -1,6 +1,0 @@
-fastapi
-uvicorn
-redis
-httpx
-psycopg2-binary
-python-dotenv

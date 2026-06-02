@@ -5,12 +5,14 @@ from google import genai
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer, util
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 from dotenv import load_dotenv
 from contextlib import contextmanager
 from datetime import datetime
 import traceback
 import logging
+import csv
+from fastapi.middleware.cors import CORSMiddleware
 
 # ============================================
 # Configuración
@@ -38,6 +40,17 @@ else:
     embedder = None
 
 app = FastAPI(title="Score & LLM Service")
+
+# ============================================
+# CORS Middleware para permitir acceso desde el Dashboard (React)
+# ============================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ============================================
 # Connection Pool de PostgreSQL
@@ -88,7 +101,7 @@ def generate_llm_answer(question_title: str, question_content: str) -> str:
         f"Detalles: {question_content}"
     )
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model='gemini-1.5-flash',
         contents=prompt
     )
 
@@ -96,6 +109,16 @@ def generate_llm_answer(question_title: str, question_content: str) -> str:
         raise ValueError("El LLM devolvió una respuesta vacía")
 
     return response.text
+
+def get_llm_answer_with_fallback(question_title: str, question_content: str) -> str:
+    try:
+        return generate_llm_answer(question_title, question_content)
+    except RetryError as e:
+        logger.warning(f"Cuota excedida o error persistente en Gemini. Usando fallback. Error: {e}")
+        return "Respuesta sintética de Fallback: Se ha excedido la cuota (Rate Limit) de la API de Gemini."
+    except Exception as e:
+        logger.error(f"Error crítico conectando a Gemini: {e}")
+        return "Respuesta sintética de Fallback: Error de conexión con Gemini."
 
 
 # ============================================
@@ -181,7 +204,7 @@ def evaluate_question(req: EvaluateRequest):
 
             # Consultar al LLM (con retry automático por exponential backoff)
             logger.info(f"[LLM] Consultando LLM para pregunta {req.question_id}...")
-            llm_answer = generate_llm_answer(title, content)
+            llm_answer = get_llm_answer_with_fallback(title, content)
 
             # Calcular ambas métricas de calidad (Solo si NO es un mock, para ahorrar CPU)
             is_mock = os.environ.get("MOCK_LLM", "False").lower() == "true"
@@ -222,3 +245,49 @@ def evaluate_question(req: EvaluateRequest):
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             cur.close()
+
+
+@app.get("/api/analytics/metrics")
+def get_metrics():
+    """Devuelve las métricas consolidadas del archivo metrics.csv."""
+    metrics_path = os.path.join(os.path.dirname(__file__), "results/metrics.csv")
+    if not os.path.exists(metrics_path):
+        return {"data": []}
+    
+    data = []
+    with open(metrics_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            data.append(row)
+    return {"data": data}
+
+
+@app.get("/api/analytics/scores")
+def get_scores():
+    """Devuelve datos de scores de PostgreSQL para la visualización."""
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        try:
+            # 1. Distribución de scores
+            cur.execute("SELECT score, rouge_score FROM questions WHERE score IS NOT NULL")
+            rows = cur.fetchall()
+            cosine_scores = [float(r[0]) for r in rows if r[0] is not None]
+            rouge_scores = [float(r[1]) for r in rows if r[1] is not None]
+
+            # 2. Top accesos
+            cur.execute("SELECT id, access_count FROM questions WHERE access_count > 0 ORDER BY access_count DESC LIMIT 30")
+            access_rows = cur.fetchall()
+            top_accesses = [{"id": r[0], "count": r[1]} for r in access_rows]
+
+            return {
+                "cosine_scores": cosine_scores,
+                "rouge_scores": rouge_scores,
+                "top_accesses": top_accesses,
+                "total_processed": len(cosine_scores)
+            }
+        except Exception as e:
+            logger.error(f"Error en /api/analytics/scores: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            cur.close()
+
